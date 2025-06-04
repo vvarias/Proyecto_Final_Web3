@@ -1,0 +1,8 @@
+
+MYSQLHOST: mysql.railway.internal
+MYSQLPORT: 3306
+MYSQLUSER: root
+MYSQLPASSWORD: mvZUgMdrZQlOezGDfzmzfiJcuhPrDKCm
+MYSQL_DATABASE: railway
+
+mysql -h mysql.railway.internal -P 3306 -u root -p railway < "C:\Users\Usuario\Downloads\bd_home.sql"

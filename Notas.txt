@@ -1,0 +1,1205 @@
+/auth/login
+src/components/Compras.vue
+valeria@gmail.com
+123456789
+celia@gmail.com
+celiaPassword.
+vanesa@gmail.com
+MiPassword123.
+taylor@gmail.com
+4562xtntaylor_
+raul@gmail.com
+599721xtn.
+
+gaelcontraseña123.
+
+
+
+
+
+
+
+
+
+
+
+
+{
+  "nombre": "Juan Pérez",
+  "email": "juan@example.com",
+  "password": "unpasswordfuerte",
+  "rol": "usuario"
+}
+
+
+
+Realizar una aplicación que tenga:
+
+-Un objetivo bien definido (por ejemplo: Aplicación para el control de mascotas).
+-Su aplicación deberá incluir por lo menos un menú.
+-Su aplicación deberá incluir por lo menos un CRUD que contemple la eliminación lógica de registros.
+-Agregue validaciones en los campos de entrada.
+-Su aplicación deberá incluir por lo menos un reporte en pdf.
+-Su aplicación deberá incluir por lo menos un gráfico estadístico.
+-Agregue una autentificación de usuarios (login y permisos)  y un CAPTCHA, para ingresar al sistema.
+-Para registrar a un nuevo usuario deberá validar su contraseña como débil, intermedio o fuerte. Esta contraseña deberá ser guardada de forma encriptada.
+-Deberá registrarse un log de acceso (usuario, ip, evento [ingreso, salida], browser, fecha y hora), el cual registrará la hora y fecha de ingreso y salida del sistema de un usuario determinado.
+-Suba su aplicación a un sitio gratuito
+
+
+
+
+
+
+
+ahora el client
+// src/apis/api.js
+import client from './client.js';
+
+// ——— Auth ———
+export const login    = (data) => client.post('/auth/login', data);
+export const register = (data) => client.post('/auth/register', data);
+export const logout   = ()     => client.post('/auth/logout');
+
+// ——— CAPTCHA ———
+export const getCaptcha = () => client.get('/captcha', { responseType: 'text' });
+
+// ——— LISTA DE COMPRAS ———
+export const getListas   = () => client.get('/listas');
+export const createLista = l  => client.post('/listas', l);
+export const updateLista = l  => client.put(/listas/${l.id_lista}, l);
+export const deleteLista = id => client.delete(/listas/${id});
+
+// Ítems
+export const getItems   = listaId => client.get(/listas/${listaId}/items);
+export const createItem = i       => client.post(/listas/${i.id_lista}/items, i);
+export const updateItem = i       => client.put(/items/${i.id_item}, i);
+export const deleteItem = id      => client.delete(/items/${id});
+
+// ——— MEDICAMENTOS ———
+export const getMedicamentos   = () => client.get('/medicamentos');
+export const createMedicamento = m  => client.post('/medicamentos', m);
+export const updateMedicamento = m  => client.put(/medicamentos/${m.id_medicamento}, m);
+export const deleteMedicamento = id => client.delete(/medicamentos/${id});
+
+// Registros
+export const getRegistros   = medId => client.get(/medicamentos/${medId}/registros);
+export const createRegistro = r     => client.post(/medicamentos/${r.id_medicamento}/registros, r);
+
+// ——— GASTOS ———
+export const getCategorias   = ()     => client.get('/categorias');
+export const createCategoria = c      => client.post('/categorias', c);
+export const deleteCategoria = id     => client.delete(/categorias/${id});
+
+export const getGastos   = ()   => client.get('/gastos');
+export const createGasto = g    => client.post('/gastos', g);
+export const updateGasto = g    => client.put(/gastos/${g.id_gasto}, g);
+export const deleteGasto = id   => client.delete(/gastos/${id});
+// client/src/apis/client.js
+import axios from 'axios';
+import { useAuthStore } from '../store/auth.js';
+
+const BASE_URL = 'http://localhost:3000/api';
+
+const client = axios.create({
+  baseURL: BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true      // <- importante
+});
+
+client.interceptors.request.use(cfg => {
+  const { token } = useAuthStore();
+  if (token) cfg.headers.Authorization = Bearer ${token};
+  return cfg;
+});
+
+export default client;
+    //src/components/Compras.vue
+<template>
+  <h2>Lista de Compras Compartida</h2>
+  <el-button type="primary" @click="openLista()">+ Nueva Lista</el-button>
+  <el-table :data="listas" style="margin-top:1rem" stripe>
+    <el-table-column prop="id_lista" label="ID" width="80"/>
+    <el-table-column prop="nombre"   label="Lista"/>
+    <el-table-column prop="creado_por" label="Creado por"/>
+    <el-table-column prop="fecha_crea" label="Fecha" width="160"/>
+    <el-table-column label="Acciones" width="200">
+      <template #default="r">
+        <el-button size="mini" @click="openLista(r.row)">Editar</el-button>
+        <el-button size="mini" type="danger" @click="confirmDelLista(r.row.id_lista)">
+          Eliminar
+        </el-button>
+        <el-button size="mini" type="success" @click="verItems(r.row)">Ver Items</el-button>
+      </template>
+    </el-table-column>
+  </el-table>
+
+  <!-- Modal Lista -->
+  <el-dialog :title="formLista.id_lista ? 'Editar Lista' : 'Nueva Lista'" v-model="showLista">
+    <el-form :model="formLista" ref="fLista" :rules="rulesLista">
+      <el-form-item label="Nombre" prop="nombre">
+        <el-input v-model="formLista.nombre"/>
+      </el-form-item>
+      <el-form-item label="Creado por" prop="creado_por">
+        <el-input v-model="formLista.creado_por"/>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="showLista = false">Cancelar</el-button>
+      <el-button type="primary" @click="saveLista()">Guardar</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- Modal Items -->
+  <el-dialog title="Items de la Lista" v-model="showItems">
+    <el-button type="primary" @click="openItem()">+ Agregar Item</el-button>
+    <el-table :data="items" style="margin-top:1rem" stripe>
+      <el-table-column prop="id_item" label="ID" width="80"/>
+      <el-table-column prop="descripcion" label="Descripción"/>
+      <el-table-column prop="cantidad" label="Cantidad"/>
+      <el-table-column prop="comprado" label="¿Comprado?" width="100">
+        <template #default="r">{{ r.row.comprado ? 'Sí':'No' }}</template>
+      </el-table-column>
+      <el-table-column label="Acciones" width="200">
+        <template #default="r">
+          <el-button size="mini" @click="openItem(r.row)">Editar</el-button>
+          <el-button size="mini" type="danger" @click="confirmDelItem(r.row.id_item)">
+            Eliminar
+          </el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <!-- Modal Item -->
+    <el-dialog :title="formItem.id_item ? 'Editar Item' : 'Nuevo Item'" v-model="showItem">
+      <el-form :model="formItem" ref="fItem" :rules="rulesItem">
+        <el-form-item label="Descripción" prop="descripcion">
+          <el-input v-model="formItem.descripcion"/>
+        </el-form-item>
+        <el-form-item label="Cantidad" prop="cantidad">
+          <el-input type="number" v-model="formItem.cantidad"/>
+        </el-form-item>
+        <el-form-item label="Comprado" prop="comprado">
+          <el-switch v-model="formItem.comprado"/>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showItem = false">Cancelar</el-button>
+        <el-button type="primary" @click="saveItem()">Guardar</el-button>
+      </template>
+    </el-dialog>
+  </el-dialog>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import * as api from '../apis/api.js';
+
+const listas     = ref([]);
+const showLista  = ref(false);
+const formLista  = ref({ id_lista: null, nombre: '', creado_por: '' });
+const fLista     = ref(null);
+const rulesLista = {
+  nombre:     [{ required:true, message:'Requerido', trigger:'blur' }],
+  creado_por: [{ required:true, message:'Requerido', trigger:'blur' }]
+};
+
+const items      = ref([]);
+const showItems  = ref(false);
+
+const showItem   = ref(false);
+const formItem   = ref({ id_item: null, descripcion: '', cantidad: 1, comprado: false, id_lista: null });
+const fItem      = ref(null);
+const rulesItem  = {
+  descripcion: [{ required:true, message:'Requerido', trigger:'blur' }],
+  cantidad:    [{ required:true, message:'Requerido', trigger:'blur' }]
+};
+
+async function loadListas() {
+  listas.value = (await api.getListas()).data;
+}
+
+onMounted(loadListas);
+
+// Renombrado aquí a openLista
+function openLista(row) {
+  if (row) {
+    formLista.value = { ...row };
+  } else {
+    formLista.value = { id_lista: null, nombre: '', creado_por: '' };
+  }
+  showLista.value = true;
+}
+
+async function saveLista() {
+  await fLista.value.validate();
+  if (formLista.value.id_lista) {
+    await api.updateLista(formLista.value);
+  } else {
+    await api.createLista(formLista.value);
+  }
+  ElMessage.success('Guardado');
+  showLista.value = false;
+  loadListas();
+}
+
+function confirmDelLista(id) {
+  ElMessageBox.confirm('¿Eliminar lista?', 'Eliminar', {
+    type: 'warning',
+    confirmButtonText: 'Sí',
+    cancelButtonText: 'No'
+  }).then(async () => {
+    await api.deleteLista(id);
+    ElMessage.success('Eliminada');
+    loadListas();
+  });
+}
+
+async function verItems(row) {
+  // Aseguramos id_lista siempre presente
+  formItem.value.id_lista = row.id_lista;
+  items.value = (await api.getItems(row.id_lista)).data;
+  showItems.value = true;
+}
+
+function openItem(row) {
+  if (row) {
+    formItem.value = { ...row };
+  } else {
+    // Usamos el id_lista que ya almacenamos en formItem.value
+    formItem.value = { id_item: null, descripcion: '', cantidad: 1, comprado: false, id_lista: formItem.value.id_lista };
+  }
+  showItem.value = true;
+}
+
+async function saveItem() {
+  await fItem.value.validate();
+  if (formItem.value.id_item) {
+    await api.updateItem(formItem.value);
+  } else {
+    await api.createItem(formItem.value);
+  }
+  ElMessage.success('Guardado');
+  showItem.value = false;
+  verItems({ id_lista: formItem.value.id_lista });
+}
+
+function confirmDelItem(id) {
+  ElMessageBox.confirm('¿Eliminar item?', 'Eliminar', {
+    type: 'warning',
+    confirmButtonText: 'Sí',
+    cancelButtonText: 'No'
+  }).then(async () => {
+    await api.deleteItem(id);
+    ElMessage.success('Eliminado');
+    verItems({ id_lista: formItem.value.id_lista });
+  });
+}
+</script>
+    //src/components/ExpenseChart.vue
+<template>
+  <div>
+    <h3 style="text-align: center; margin-bottom: 1rem">
+      Gastos por Categoría (Debug)
+    </h3>
+
+    <!-- Mostrar JSON de debug -->
+    <pre style="background:#f0f0f0; padding:1rem; max-height:200px; overflow:auto;">
+{{ debug }}
+    </pre>
+
+    <!-- Cambiado a :data y :options -->
+    <Pie
+      v-if="chartData.labels.length"
+      :data="chartData"
+      :options="chartOptions"
+    />
+    <p v-else>No hay datos para graficar</p>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import { Pie } from 'vue-chartjs'
+import { Chart, Title, Tooltip, Legend, ArcElement } from 'chart.js'
+import * as api from '../apis/api.js'
+
+// Registrar los elementos que usa Pie (arc)
+Chart.register(Title, Tooltip, Legend, ArcElement)
+
+const debug = ref({})
+
+const chartData = ref({
+  labels: [],
+  datasets: [
+    {
+      label: 'Monto',
+      data: [],
+      backgroundColor: []
+    }
+  ]
+})
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: 'bottom' } }
+}
+
+onMounted(async () => {
+  try {
+    const [catsRes, gastosRes] = await Promise.all([
+      api.getCategorias(),
+      api.getGastos()
+    ])
+    const cats   = catsRes.data
+    const gastos = gastosRes.data
+
+    // Para ver en el <pre>
+    debug.value = { cats, gastos }
+
+    // Suma gastos por categoría
+    const sums = {}
+    cats.forEach(c => { sums[c.id_categoria] = 0 })
+    gastos.forEach(g => {
+      if (sums[g.id_categoria] !== undefined)
+        sums[g.id_categoria] += parseFloat(g.monto)
+    })
+
+    // Rellenar chartData
+    chartData.value.labels = cats.map(c => c.nombre)
+    chartData.value.datasets[0].data = cats.map(c => sums[c.id_categoria] || 0)
+    chartData.value.datasets[0].backgroundColor = cats.map(() => {
+      const r = 200 + Math.random()*55|0
+      const g = 200 + Math.random()*55|0
+      const b = 200 + Math.random()*55|0
+      return rgba(${r},${g},${b},0.7)
+    })
+  } catch (e) {
+    console.error('Error cargando datos de gráfico:', e)
+  }
+})
+</script>
+
+<style scoped>
+div { position: relative; height: auto; }
+pre { font-size: 0.85rem; margin-bottom: 1rem; }
+</style>
+    //src/components/Gastos.vue
+<template>
+  <div class="gastos-page">
+    <h2>Control de Gastos</h2>
+
+    <!-- Gráfico -->
+    <div class="chart-wrapper">
+      <ExpenseChart />
+    </div>
+
+    <!-- Botones -->
+    <div class="actions" style="margin: 1rem 0">
+      <el-button type="primary" @click="openCat()">+ Categoría</el-button>
+      <el-button type="primary" @click="openGasto()">+ Gasto</el-button>
+    </div>
+
+    <!-- Tabla -->
+    <el-table :data="gastos" stripe style="margin-top:1rem">
+      <el-table-column prop="id_gasto"     label="ID"       width="80"/>
+      <el-table-column prop="descripcion"  label="Desc."/>
+      <el-table-column prop="monto"        label="Monto"    width="100"/>
+      <el-table-column prop="fecha"        label="Fecha"    width="120"/>
+      <el-table-column prop="categoria"    label="Categoría"/>
+      <el-table-column label="Acciones"    width="200">
+        <template #default="scope">
+          <el-button size="mini" @click="openGasto(scope.row)">Editar</el-button>
+          <el-button size="mini" type="danger"
+                     @click="confirmDelGasto(scope.row.id_gasto)">
+            Eliminar
+          </el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <!-- Modal Categoría -->
+    <el-dialog title="Categoría" v-model="showCat">
+      <el-form :model="catForm" ref="fCat" :rules="rulesCat">
+        <el-form-item label="Nombre" prop="nombre">
+          <el-input v-model="catForm.nombre"/>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showCat = false">Cancelar</el-button>
+        <el-button type="primary" @click="saveCat()">Guardar</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Modal Gasto -->
+    <el-dialog title="Gasto" v-model="showGasto">
+      <el-form :model="gForm" ref="fG" :rules="rulesG">
+        <el-form-item label="Desc." prop="descripcion">
+          <el-input v-model="gForm.descripcion"/>
+        </el-form-item>
+        <el-form-item label="Monto" prop="monto">
+          <el-input type="number" v-model="gForm.monto"/>
+        </el-form-item>
+        <el-form-item label="Fecha" prop="fecha">
+          <el-date-picker v-model="gForm.fecha" type="date"/>
+        </el-form-item>
+        <el-form-item label="Categoría" prop="id_categoria">
+          <el-select v-model="gForm.id_categoria" placeholder="Selecciona">
+            <el-option
+              v-for="c in cats"
+              :key="c.id_categoria"
+              :label="c.nombre"
+              :value="c.id_categoria"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showGasto = false">Cancelar</el-button>
+        <el-button type="primary" @click="saveGasto()">Guardar</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import ExpenseChart from './ExpenseChart.vue';
+import * as api from '../apis/api.js';
+
+const cats     = ref([]);
+const gastos   = ref([]);
+
+const showCat  = ref(false);
+const catForm  = ref({ id_categoria: null, nombre: '' });
+const fCat     = ref(null);
+const rulesCat = { nombre: [{ required: true, message: 'Requerido', trigger: 'blur' }] };
+
+const showGasto = ref(false);
+const gForm     = ref({ id_gasto: null, descripcion: '', monto: 0, fecha: null, id_categoria: null });
+const fG        = ref(null);
+const rulesG    = {
+  descripcion: [{ required: true, message: 'Requerido', trigger: 'blur' }],
+  monto:       [{ required: true, message: 'Requerido', trigger: 'blur' }],
+  fecha:       [{ required: true, message: 'Requerido', trigger: 'change' }],
+  id_categoria:[{ required: true, message: 'Requerido', trigger: 'change' }]
+};
+
+async function load() {
+  const [catsRes, gastosRes] = await Promise.all([
+    api.getCategorias(),
+    api.getGastos()
+  ]);
+  cats.value   = catsRes.data;
+  gastos.value = gastosRes.data.map(g => ({
+    ...g,
+    // Asegúrate de que tu back devuelve también el nombre de la categoría
+    categoria: g.categoria || catsRes.data.find(c => c.id_categoria === g.id_categoria)?.nombre
+  }));
+}
+
+onMounted(load);
+
+function openCat(row) {
+  catForm.value = row ? { ...row } : { id_categoria: null, nombre: '' };
+  showCat.value = true;
+}
+
+async function saveCat() {
+  await fCat.value.validate();
+  if (catForm.value.id_categoria) {
+    await api.updateCategoria(catForm.value);
+  } else {
+    await api.createCategoria(catForm.value);
+  }
+  ElMessage.success('Guardado');
+  showCat.value = false;
+  load();
+}
+
+function confirmDelCategoria(id) {
+  ElMessageBox.confirm('¿Eliminar categoría?', 'Eliminar', {
+    type: 'warning', confirmButtonText: 'Sí', cancelButtonText: 'No'
+  }).then(async () => {
+    await api.deleteCategoria(id);
+    ElMessage.success('Eliminada');
+    load();
+  });
+}
+
+function openGasto(row) {
+  gForm.value = row
+    ? { ...row }
+    : { id_gasto: null, descripcion: '', monto: 0, fecha: null, id_categoria: null };
+  showGasto.value = true;
+}
+
+async function saveGasto() {
+  await fG.value.validate();
+  if (gForm.value.id_gasto) {
+    await api.updateGasto(gForm.value);
+  } else {
+    await api.createGasto(gForm.value);
+  }
+  ElMessage.success('Guardado');
+  showGasto.value = false;
+  load();
+}
+
+function confirmDelGasto(id) {
+  ElMessageBox.confirm('¿Eliminar gasto?', 'Eliminar', {
+    type: 'warning', confirmButtonText: 'Sí', cancelButtonText: 'No'
+  }).then(async () => {
+    await api.deleteGasto(id);
+    ElMessage.success('Eliminado');
+    load();
+  });
+}
+</script>
+
+<style scoped>
+.gastos-page {
+  padding: 1rem;
+}
+.chart-wrapper {
+  position: relative;
+  height: 300px;
+  margin-bottom: 2rem;
+}
+</style>
+    //src/components/Medicacion.vue
+<template>
+  <h2>Recordatorio de Medicamentos</h2>
+  <el-button type="primary" @click="openMed()">+ Nuevo Medicamento</el-button>
+  <el-table :data="meds" style="margin-top:1rem" stripe>
+    <el-table-column prop="id_medicamento" label="ID" width="80"/>
+    <el-table-column prop="nombre"      label="Nombre"/>
+    <el-table-column prop="dosis"       label="Dosis"/>
+    <el-table-column prop="frecuencia"  label="Frecuencia"/>
+    <el-table-column prop="hora_inicio" label="Hora Inicio" width="120"/>
+    <el-table-column label="Acciones" width="240">
+      <template #default="r">
+        <el-button size="mini" @click="openMed(r.row)">Editar</el-button>
+        <el-button size="mini" type="danger" @click="confirmDelMed(r.row.id_medicamento)">
+          Eliminar
+        </el-button>
+        <el-button size="mini" type="success" @click="verReg(r.row.id_medicamento)">
+          Ver Registros
+        </el-button>
+      </template>
+    </el-table-column>
+  </el-table>
+
+  <!-- Modal Medicamento -->
+  <el-dialog :title="medForm.id_medicamento?'Editar':'Nuevo'" v-model="showMed">
+    <el-form :model="medForm" ref="fMed" :rules="rulesMed">
+      <el-form-item label="Nombre" prop="nombre"><el-input v-model="medForm.nombre"/></el-form-item>
+      <el-form-item label="Dosis" prop="dosis"><el-input v-model="medForm.dosis"/></el-form-item>
+      <el-form-item label="Frecuencia" prop="frecuencia"><el-input v-model="medForm.frecuencia"/></el-form-item>
+      <el-form-item label="Hora" prop="hora_inicio"><el-time-picker v-model="medForm.hora_inicio" /></el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="showMed=false">Cancelar</el-button>
+      <el-button type="primary" @click="saveMed()">Guardar</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- Modal Registros -->
+  <el-dialog title="Registros" v-model="showReg">
+    <el-table :data="regs" stripe>
+      <el-table-column prop="id_registro" label="ID" width="80"/>
+      <el-table-column prop="fecha_hora" label="Fecha/Hora"/>
+      <el-table-column prop="tomado" label="Tomado?" width="100">
+        <template #default="r">{{ r.row.tomado? 'Sí':'No' }}</template>
+      </el-table-column>
+    </el-table>
+  </el-dialog>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import * as api from '../apis/api.js';
+
+const meds    = ref([]);
+const showMed = ref(false);
+const medForm = ref({ id_medicamento:null, nombre:'', dosis:'', frecuencia:'', hora_inicio:null });
+const fMed    = ref(null);
+const rulesMed = {
+  nombre: [{ required:true }], dosis:[{ required:true }], frecuencia:[{ required:true }],
+  hora_inicio:[{ required:true, message:'Selecciona hora', trigger:'change' }]
+};
+
+const regs    = ref([]);
+const showReg = ref(false);
+
+async function loadMed(){
+  meds.value = (await api.getMedicamentos()).data;
+}
+onMounted(loadMed);
+
+function openMed(r){
+  if(r) medForm.value={ ...r };
+  else medForm.value={ id_medicamento:null, nombre:'', dosis:'', frecuencia:'', hora_inicio:null };
+  showMed.value=true;
+}
+
+async function saveMed(){
+  await fMed.value.validate();
+  if(medForm.value.id_medicamento) await api.updateMedicamento(medForm.value);
+  else await api.createMedicamento(medForm.value);
+  ElMessage.success('Guardado');
+  showMed.value=false; loadMed();
+}
+
+function confirmDelMed(id){
+  ElMessageBox.confirm('¿Eliminar?','Eliminar',{ type:'warning', confirmButtonText:'Sí', cancelButtonText:'No' })
+    .then(async()=>{ await api.deleteMedicamento(id); ElMessage.success('Eliminado'); loadMed(); });
+}
+
+async function verReg(id){
+  regs.value = (await api.getRegistros(id)).data;
+  showReg.value=true;
+}
+</script>
+//src/components/Navbar.vue
+<template>
+  <el-header class="navbar">
+    <div class="navbar-left">
+      <el-icon><i class="el-icon-menu" /></el-icon>
+      <span class="navbar-title">Mi Sistema</span>
+    </div>
+
+    <div class="navbar-right">
+      <el-button type="text" @click="goTo('control')" v-if="authStore.isAuthenticated">
+        Centro de Control
+      </el-button>
+      <el-button type="text" @click="goTo('login')" v-else>
+        Iniciar Sesión
+      </el-button>
+      <el-button type="text" @click="goTo('register')" v-else>
+        Registrarse
+      </el-button>
+      <el-button type="danger" @click="logout" v-if="authStore.isAuthenticated">
+        Cerrar Sesión
+      </el-button>
+    </div>
+  </el-header>
+</template>
+
+<script setup>
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '../store/auth';
+import { ElMessage } from 'element-plus';
+
+const router = useRouter();
+const authStore = useAuthStore();
+
+const goTo = (route) => {
+  router.push({ name: route });
+};
+
+const logout = () => {
+  authStore.logout();
+  ElMessage.success('Sesión cerrada');
+  router.push({ name: 'login' });
+};
+</script>
+
+<style scoped>
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #409eff;
+  color: white;
+  padding: 0 20px;
+}
+
+.navbar-title {
+  font-size: 1.5em;
+  margin-left: 10px;
+  font-weight: bold;
+}
+
+.navbar-left,
+.navbar-right {
+  display: flex;
+  align-items: center;
+}
+
+.el-button {
+  margin-left: 10px;
+  color: white;
+}
+</style>
+//src/router/index.js
+import { createRouter, createWebHistory } from 'vue-router'
+import Login      from '../views/Login.vue'
+import Register   from '../views/Register.vue'
+import Dashboard  from '../views/Dashboard.vue'
+import Compras    from '../views/ComprasWrapper.vue'
+import Medicacion from '../views/MedicacionWrapper.vue'
+import Gastos     from '../views/GastosWrapper.vue'
+import Reportes   from '../views/Reportes.vue'
+import { useAuthStore } from '../store/auth.js'
+
+const routes = [
+  { path: '/login',    name: 'Login',    component: Login },
+  { path: '/register', name: 'Register', component: Register },
+
+  {
+    path: '/dashboard',
+    name: 'Dashboard',
+    component: () => import('../views/Dashboard.vue'), // o Home.vue, etc.
+    meta: { requiresAuth: true },
+    children: [
+      { path: '',           name: 'Compras',    component: Compras },
+      { path: 'medicacion', name: 'Medicacion', component: Medicacion },
+      { path: 'gastos',     name: 'Gastos',      component: Gastos },
+      { path: 'reportes',   name: 'Reportes',    component: Reportes }
+    ]
+  },
+
+  // cualquier otra ruta te manda a /
+  { path: '/:pathMatch(.*)*', redirect: '/' }
+
+  
+
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+router.beforeEach((to, from, next) => {
+  const auth = useAuthStore()
+  if (to.meta.requiresAuth && !auth.token) {
+    return next({ name: 'Login' })
+  }
+  next()
+})
+
+export default router
+//src/services/auth.js
+import client from '../apis/client.js';
+
+export async function login(email, password, captchaToken) {
+  const response = await client.post('/auth/login', { email, password, captchaToken });
+  return response.data;
+}
+
+export async function register(data) {
+  const response = await client.post('/auth/register', data);
+  return response.data;
+}
+    //src/store/auth.js
+import { reactive } from 'vue';
+import { login as apiLogin, register as apiRegister } from '../services/auth.js';
+
+const state = reactive({
+  token: localStorage.getItem('token') || '',
+  user: JSON.parse(localStorage.getItem('user') || null),
+  error: null
+});
+
+export function useAuthStore() {
+  const login = async (email, password) => {
+    try {
+      state.error = null;
+      const { token, user } = await apiLogin(email, password);
+      state.token = token;
+      state.user = user;
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+    } catch (error) {
+      state.error = error.message;
+      throw error;
+    }
+  };
+
+  const register = async (data) => {
+    await apiRegister(data);
+  };
+
+  const logout = () => {
+    state.token = '';
+    state.user  = null;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  };
+
+  return { ...state, login, register, logout };
+}
+//src/views/ComprasWrapper.vue
+<template>
+  <Compras />
+</template>
+
+<script setup>
+import Compras from '../components/Compras.vue'
+</script>
+//src/views/Dashboard.vue
+<template>
+  <el-container style="height:100vh">
+    <el-header>
+      <Menu />
+    </el-header>
+    <el-main>
+      <router-view/>
+    </el-main>
+  </el-container>
+</template>
+
+<script setup>
+import Menu from '../components/Navbar.vue'
+</script>
+
+<style>
+/* estilos opcionales */
+</style>
+//src/views/GastosWrapper.vue
+<template>
+  <Gastos />
+</template>
+
+<script setup>
+import Gastos from '../components/Gastos.vue'
+</script>
+//src/views/Login.vue
+<template>
+  <div class="login-container">
+    <el-card class="login-card">
+      <h2>Iniciar Sesión</h2>
+      <el-form :model="form" :rules="rules" ref="formRef">
+        <el-form-item label="Email" prop="email">
+          <el-input v-model="form.email" autocomplete="off" />
+        </el-form-item>
+
+        <el-form-item label="Contraseña" prop="password">
+          <el-input v-model="form.password" type="password" autocomplete="off" />
+        </el-form-item>
+
+        <el-form-item label="Captcha" prop="captcha">
+          <el-row gutter="8">
+            <el-col :span="12">
+              <el-input v-model="form.captcha" placeholder="Escribe el código" />
+            </el-col>
+            <el-col :span="12">
+              <img
+                :src="captchaImageUrl"
+                @click="reloadCaptcha"
+                alt="Captcha"
+                title="Haz clic para recargar"
+                style="cursor: pointer; border: 1px solid #ccc; padding: 4px;"
+              />
+            </el-col>
+          </el-row>
+        </el-form-item>
+
+        <el-form-item>
+          <el-button type="primary" @click="submitForm">Iniciar Sesión</el-button>
+        </el-form-item>
+
+        <el-form-item>
+          <el-link @click="goToRegister" type="primary">¿No estás registrado?</el-link>
+        </el-form-item>
+      </el-form>
+    </el-card>
+  </div>
+</template>
+
+<script setup>
+import { reactive, ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
+import client from '../apis/client.js';
+
+const router = useRouter();
+const formRef = ref();
+
+const form = reactive({
+  email: '',
+  password: '',
+  captcha: ''
+});
+
+const rules = {
+  email: [
+    { required: true, message: 'Por favor ingresa tu correo', trigger: 'blur' },
+    { type: 'email', message: 'Formato de correo inválido', trigger: 'blur' }
+  ],
+  password: [{ required: true, message: 'Por favor ingresa tu contraseña', trigger: 'blur' }],
+  captcha: [{ required: true, message: 'Por favor ingresa el captcha', trigger: 'blur' }]
+};
+
+const captchaImageUrl = ref('');
+
+const reloadCaptcha = () => {
+  captchaImageUrl.value = http://localhost:3000/api/captcha?${Date.now()};
+};
+
+const submitForm = () => {
+  formRef.value.validate(async (valid) => {
+    if (!valid) return;
+    try {
+      const response = await client.post('/auth/login', {
+        email:    form.email,
+        password: form.password,
+        captcha:  form.captcha
+      });
+      ElMessage.success('¡Inicio de sesión exitoso!');
+
+      // Guardar token y usuario en localStorage o en tu store
+      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      router.push('./dashboard');
+    } catch (error) {
+      const msg = error.response?.data?.message || 'Error al iniciar sesión';
+      ElMessage.error(msg);
+      reloadCaptcha(); // recarga para no reutilizar el captcha anterior
+    }
+  });
+};
+
+const goToRegister = () => {
+  router.push('/register');
+};
+
+onMounted(() => {
+  reloadCaptcha();
+});
+</script>
+
+<style scoped>
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f5f5f5;
+}
+.login-card {
+  width: 400px;
+  padding: 20px;
+}
+</style>
+//src/views/MedicacionWrapper.vue
+<template>
+  <Medicacion />
+</template>
+
+<script setup>
+import Medicacion from '../components/Medicacion.vue'
+</script>
+//src/views/Register.vue
+<template>
+  <div class="auth-page">
+    <h2>Register</h2>
+    <el-form
+      ref="formRef"
+      :model="form"
+      :rules="rules"
+      @submit.prevent="onSubmit"
+      label-width="100px"
+    >
+      <el-form-item label="Nombre" prop="nombre">
+        <el-input v-model="form.nombre" autocomplete="off" />
+      </el-form-item>
+
+      <el-form-item label="Email" prop="email">
+        <el-input v-model="form.email" autocomplete="off" />
+      </el-form-item>
+
+      <el-form-item label="Password" prop="password">
+        <el-input type="password" v-model="form.password" autocomplete="off" />
+      </el-form-item>
+
+      <el-form-item label="Rol" prop="rol">
+        <el-select v-model="form.rol" placeholder="Selecciona rol">
+          <el-option label="Usuario" value="usuario" />
+          <el-option label="Admin"   value="admin" />
+        </el-select>
+      </el-form-item>
+
+      <el-form-item label="Captcha" prop="captcha">
+        <div class="captcha-container">
+          <div v-html="captchaSvg" class="captcha-image"></div>
+          <el-button icon="el-icon-refresh" @click="loadCaptcha" circle />
+        </div>
+        <el-input v-model="form.captcha" placeholder="Ingresa el texto" />
+      </el-form-item>
+
+      <el-form-item>
+        <el-button type="primary" native-type="submit">Registrar</el-button>
+        <router-link to="/login" style="margin-left: 1rem;">
+          ¿Ya tienes cuenta?
+        </router-link>
+      </el-form-item>
+    </el-form>
+  </div>
+</template>
+
+<script setup>
+import { reactive, ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
+import { useAuthStore } from '../store/auth.js';
+import * as api from '../apis/api.js';
+
+const form = reactive({
+  nombre:  '',
+  email:   '',
+  password:'',
+  rol:     'usuario',
+  captcha: ''
+});
+const captchaSvg = ref('');
+const router = useRouter();
+const auth = useAuthStore();
+
+const rules = {
+  nombre:  [{ required: true, message: 'Nombre es requerido', trigger: 'blur' }],
+  email:   [
+    { required: true, message: 'Email es requerido', trigger: 'blur' },
+    { type: 'email',   message: 'Email inválido',   trigger: 'blur' }
+  ],
+  password:[
+    { required: true, message: 'Contraseña es requerida', trigger: 'blur' },
+    { min: 8, message: 'Mínimo 8 caracteres', trigger: 'blur' }
+  ],
+  rol:     [{ required: true, message: 'Selecciona un rol', trigger: 'change' }],
+  captcha: [{ required: true, message: 'Captcha es requerido', trigger: 'blur' }]
+};
+
+async function loadCaptcha() {
+  try {
+    const res = await api.getCaptcha();
+    captchaSvg.value = res.data;
+  } catch {
+    ElMessage.error('No se pudo cargar captcha');
+  }
+}
+
+const onSubmit = async () => {
+  try {
+    await auth.register({
+      nombre:   form.nombre,
+      email:    form.email,
+      password: form.password,
+      rol:      form.rol,
+      captcha:  form.captcha
+    });
+    ElMessage.success('Registro exitoso, ahora haz login');
+    router.push('/login');
+  } catch (e) {
+    const msg = e.response?.data?.error || e.message || 'Error al registrar';
+    ElMessage.error(msg);
+    loadCaptcha();
+  }
+};
+
+onMounted(loadCaptcha);
+</script>
+
+<style scoped>
+.auth-page {
+  max-width: 400px;
+  margin: 4rem auto;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.captcha-container {
+  display: flex;
+  align-items: center;
+}
+.captcha-image {
+  border: 1px solid #ddd;
+  padding: 4px;
+  margin-right: 0.5rem;
+}
+</style>
+//src/views/Reportes.vue
+<template>
+  <div class="reportes-page">
+    <h2>Reportes PDF</h2>
+    <el-button type="primary" @click="generarPDF">Descargar Reporte de Gastos</el-button>
+  </div>
+</template>
+
+<script setup>
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
+import * as api from '../apis/api.js'
+
+async function generarPDF() {
+  const { data: gastos } = await api.getGastos()
+  const doc = new jsPDF()
+  doc.text('Reporte de Gastos', 14, 20)
+  doc.autoTable({
+    head: [['ID', 'Descripción', 'Monto', 'Fecha', 'Categoría']],
+    body: gastos.map(g => [g.id_gasto, g.descripcion, g.monto, g.fecha, g.categoria])
+  })
+  doc.save('reporte_gastos.pdf')
+}
+</script>
+
+<style scoped>
+.reportes-page {
+  padding: 1rem;
+}
+</style>
+    //src/App.vue
+<template>
+  <Navbar />
+  <router-view/>
+</template>
+
+<script setup>
+// Nada que importar aquí: todo se hace vía router-view
+</script>
+
+<style>
+/* Opcional: estilos globales para el body */
+body {
+  margin: 0;
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  background-color: #f5f7fa;
+  color: #2c3e50;
+  min-height: 100vh;
+}
+.auth-page {
+  max-width: 400px;
+  margin: 4rem auto;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+</style>
+// src/main.js
+import { createApp } from 'vue'
+import App from './App.vue'
+import router from './router'
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
+import { VueReCaptcha } from 'vue-recaptcha-v3'
+
+createApp(App)
+  .use(router)
+  .use(ElementPlus)
+  .use(VueReCaptcha, {
+    siteKey: 'TU_SITE_KEY',          // reemplaza con tu site key
+    loaderOptions: {
+      autoHideBadge: false,          // ahora el badge será visible
+      hideOnError: false
+    }
+  })
+  .mount('#app')
+Arregla lo que esta mal, por que me funciona el login y el register, pero no se por que no me muestra nada ahora que entro al link
